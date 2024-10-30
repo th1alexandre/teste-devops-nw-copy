@@ -1,0 +1,52 @@
+name: Update GitHub Latest Tag and Release
+
+on:
+  push:
+    branches:
+      - main
+      - thiago
+
+permissions:
+  packages: write
+  id-token: write
+  contents: write
+  attestations: write
+
+jobs:
+  update-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Update latest tag
+        run: |
+          # Get the latest commit hash
+          latest_commit=$(git rev-parse HEAD)
+
+          # Update the 'latest' tag to point to the latest commit
+          git tag -f latest $latest_commit
+          git push origin latest --force
+
+      - name: Update GitHub Release to Latest Tag
+        run: |
+          # Get the latest release ID with 'latest' tag
+          latest_release=$(gh release list --limit 1 | grep latest | awk '{print $1}')
+
+          if [ -z "$latest_release" ]; then
+            # Create a new release if the 'latest' release doesn't exist
+            gh release create latest --title "Latest"
+          else
+            # Update the existing 'latest' release to the new tag
+            gh release edit latest --tag latest --latest
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  build-image:
+    needs: update-release
+    uses: ./.github/workflows/build-dockerfile.yaml
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+      DOCKERHUB_NAMESPACE: ${{ secrets.DOCKERHUB_NAMESPACE }}
+      DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_REPOSITORY }}

@@ -1,0 +1,39 @@
+name: Manually update EC2 container
+
+on:
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  update_container:
+    name: SSH into EC2 and Update Docker Container
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v4
+
+      # SSH into EC2 and perform Docker operations
+      - name: SSH into EC2 and update Docker container
+        env:
+          CONTAINER_NAME: "teste-devops-nw"
+          DOCKER_IMAGE: "${{ secrets.DOCKERHUB_NAMESPACE }}/${{ secrets.DOCKERHUB_REPOSITORY }}:latest"
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}  # EC2 public IP in secrets
+          EC2_USER: ${{ secrets.EC2_USER }}  # SSH user in secrets (e.g., ubuntu)
+        run: |
+          echo "${SSH_PRIVATE_KEY}" > private_key.pem
+          chmod 400 private_key.pem
+          
+          ssh -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
+            echo "Pulling the latest Docker image..."
+            sudo docker pull $DOCKER_IMAGE
+
+            echo "Stopping and removing the old container..."
+            sudo docker stop $CONTAINER_NAME || true
+            sudo docker rm $CONTAINER_NAME || true
+
+            echo "Running the new container..."
+            sudo docker run -d --name $CONTAINER_NAME -p 5000:5000 $DOCKER_IMAGE
+          EOF
+          
+          rm private_key.pem
